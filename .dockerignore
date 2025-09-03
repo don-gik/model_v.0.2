@@ -1,0 +1,12 @@
+# Ignore the data directory
+data/
+
+# Ignore large files in the data directory explicitly
+data/daily.nc
+data/enso_data.npz
+data/enso_normalized.npz
+
+# Ignore other common files
+.git
+.gitignore
+GEMINI.md

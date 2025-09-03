@@ -1,0 +1,10 @@
+# PyTorch libraries for CPU
+torch==2.4.0
+torchvision
+torchaudio
+
+# Data handling and numerical operations
+numpy==1.26.4
+
+# Experiment tracking
+wandb==0.17.5
