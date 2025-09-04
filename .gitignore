@@ -1,3 +1,6 @@
 GEMINI.md
 data/*
 data
+.vscode
+models
+__pycache__
