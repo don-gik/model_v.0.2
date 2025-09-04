@@ -11,3 +11,6 @@ numpy==1.26.4
 
 # Experiment tracking
 wandb==0.17.5
+
+huggingface
+accelerate

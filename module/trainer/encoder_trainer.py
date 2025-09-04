@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from module.model.encoder import Encoder
-from ensodataset import ENSOSkipGramDataset
+from module.dataset.ensodataset import ENSOSkipGramDataset
 from torch.nn.utils import clip_grad_norm_
 import wandb
 
@@ -61,7 +61,7 @@ def train_encoder(encoder, base_npz_data, epochs=100, batch_size=64, lr=1e-4, de
         torch.save(encoder.state_dict(), './models/astra_encoder.pth')
 
 
-if __name__ == '__main__':
+def main():
     import numpy as np
     npz = np.load('./data/enso_normalized.npz')
     base_npz_data = npz['data'][:, :, :40, :200]  # [T, C, H, W]
