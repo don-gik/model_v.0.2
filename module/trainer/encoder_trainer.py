@@ -65,5 +65,5 @@ def main():
     import numpy as np
     npz = np.load('./data/enso_normalized.npz')
     base_npz_data = npz['data'][:, :, :40, :200]  # [T, C, H, W]
-    encoder = Encoder(in_channels=6, embed_dim=256, mid_dim=128)
+    encoder = Encoder(in_channels=4, embed_dim=128, mid_dim=32)
     train_encoder(encoder, base_npz_data, batch_size=32)

@@ -3,6 +3,8 @@ from module import trainer
 import argparse
 import logging
 
+import os
+
 
 
 if __name__ == "__main__":
@@ -12,6 +14,10 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--train", dest="train", action="store")
 
     args = parser.parse_args()
+
+
+    if not os.path.exists('models'):
+        os.mkdir('models')
 
     if args.debug:
         logging.basicConfig(

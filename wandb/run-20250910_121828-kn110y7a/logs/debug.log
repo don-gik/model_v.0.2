@@ -1,0 +1,23 @@
+2025-09-10 12:18:28,396 INFO    MainThread:1192877 [wandb_setup.py:_flush():81] Current SDK version is 0.21.3
+2025-09-10 12:18:28,396 INFO    MainThread:1192877 [wandb_setup.py:_flush():81] Configure stats pid to 1192877
+2025-09-10 12:18:28,396 INFO    MainThread:1192877 [wandb_setup.py:_flush():81] Loading settings from /src/gs25049/.config/wandb/settings
+2025-09-10 12:18:28,396 INFO    MainThread:1192877 [wandb_setup.py:_flush():81] Loading settings from /src/gs25049/last_rae/model_v.0.2/wandb/settings
+2025-09-10 12:18:28,396 INFO    MainThread:1192877 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-09-10 12:18:28,397 INFO    MainThread:1192877 [wandb_init.py:setup_run_log_directory():686] Logging user logs to /src/gs25049/last_rae/model_v.0.2/wandb/run-20250910_121828-kn110y7a/logs/debug.log
+2025-09-10 12:18:28,397 INFO    MainThread:1192877 [wandb_init.py:setup_run_log_directory():687] Logging internal logs to /src/gs25049/last_rae/model_v.0.2/wandb/run-20250910_121828-kn110y7a/logs/debug-internal.log
+2025-09-10 12:18:28,397 INFO    MainThread:1192877 [wandb_init.py:init():813] calling init triggers
+2025-09-10 12:18:28,397 INFO    MainThread:1192877 [wandb_init.py:init():818] wandb.init called with sweep_config: {}
+config: {'_wandb': {}}
+2025-09-10 12:18:28,397 INFO    MainThread:1192877 [wandb_init.py:init():854] starting backend
+2025-09-10 12:18:28,609 INFO    MainThread:1192877 [wandb_init.py:init():857] sending inform_init request
+2025-09-10 12:18:28,618 INFO    MainThread:1192877 [wandb_init.py:init():865] backend started and connected
+2025-09-10 12:18:28,621 INFO    MainThread:1192877 [wandb_init.py:init():936] updated telemetry
+2025-09-10 12:18:28,630 INFO    MainThread:1192877 [wandb_init.py:init():960] communicating run to backend with 90.0 second timeout
+2025-09-10 12:18:29,365 INFO    MainThread:1192877 [wandb_init.py:init():1011] starting run threads in backend
+2025-09-10 12:18:29,461 INFO    MainThread:1192877 [wandb_run.py:_console_start():2494] atexit reg
+2025-09-10 12:18:29,462 INFO    MainThread:1192877 [wandb_run.py:_redirect():2342] redirect: wrap_raw
+2025-09-10 12:18:29,462 INFO    MainThread:1192877 [wandb_run.py:_redirect():2411] Wrapping output streams.
+2025-09-10 12:18:29,462 INFO    MainThread:1192877 [wandb_run.py:_redirect():2434] Redirects installed.
+2025-09-10 12:18:29,465 INFO    MainThread:1192877 [wandb_init.py:init():1057] run started, returning control to user process
+2025-09-10 12:18:37,734 INFO    wandb-AsyncioManager-main:1192877 [service_client.py:_forward_responses():84] Reached EOF.
+2025-09-10 12:18:37,735 INFO    wandb-AsyncioManager-main:1192877 [mailbox.py:close():137] Closing mailbox, abandoning 1 handles.

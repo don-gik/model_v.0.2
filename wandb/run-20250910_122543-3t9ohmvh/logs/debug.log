@@ -1,0 +1,56 @@
+2025-09-10 12:25:43,039 INFO    MainThread:1196775 [wandb_setup.py:_flush():81] Current SDK version is 0.21.3
+2025-09-10 12:25:43,039 INFO    MainThread:1196775 [wandb_setup.py:_flush():81] Configure stats pid to 1196775
+2025-09-10 12:25:43,039 INFO    MainThread:1196775 [wandb_setup.py:_flush():81] Loading settings from /src/gs25049/.config/wandb/settings
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_setup.py:_flush():81] Loading settings from /src/gs25049/last_rae/model_v.0.2/wandb/settings
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_init.py:setup_run_log_directory():686] Logging user logs to /src/gs25049/last_rae/model_v.0.2/wandb/run-20250910_122543-3t9ohmvh/logs/debug.log
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_init.py:setup_run_log_directory():687] Logging internal logs to /src/gs25049/last_rae/model_v.0.2/wandb/run-20250910_122543-3t9ohmvh/logs/debug-internal.log
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_init.py:init():813] calling init triggers
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_init.py:init():818] wandb.init called with sweep_config: {}
+config: {'_wandb': {}}
+2025-09-10 12:25:43,040 INFO    MainThread:1196775 [wandb_init.py:init():854] starting backend
+2025-09-10 12:25:43,251 INFO    MainThread:1196775 [wandb_init.py:init():857] sending inform_init request
+2025-09-10 12:25:43,258 INFO    MainThread:1196775 [wandb_init.py:init():865] backend started and connected
+2025-09-10 12:25:43,260 INFO    MainThread:1196775 [wandb_init.py:init():936] updated telemetry
+2025-09-10 12:25:43,269 INFO    MainThread:1196775 [wandb_init.py:init():960] communicating run to backend with 90.0 second timeout
+2025-09-10 12:25:45,602 INFO    MainThread:1196775 [wandb_init.py:init():1011] starting run threads in backend
+2025-09-10 12:25:45,670 INFO    MainThread:1196775 [wandb_run.py:_console_start():2494] atexit reg
+2025-09-10 12:25:45,670 INFO    MainThread:1196775 [wandb_run.py:_redirect():2342] redirect: wrap_raw
+2025-09-10 12:25:45,670 INFO    MainThread:1196775 [wandb_run.py:_redirect():2411] Wrapping output streams.
+2025-09-10 12:25:45,670 INFO    MainThread:1196775 [wandb_run.py:_redirect():2434] Redirects installed.
+2025-09-10 12:25:45,673 INFO    MainThread:1196775 [wandb_init.py:init():1057] run started, returning control to user process
+2025-09-10 12:52:17,019 INFO    wandb-AsyncioManager-main:1196775 [service_client.py:_forward_responses():84] Reached EOF.
+2025-09-10 12:52:17,020 INFO    wandb-AsyncioManager-main:1196775 [mailbox.py:close():137] Closing mailbox, abandoning 1 handles.
+2025-09-10 12:52:18,387 ERROR   wandb-AsyncioManager-main:1196775 [asyncio_manager.py:fn_wrap_exceptions():183] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/asyncio_manager.py", line 181, in fn_wrap_exceptions
+    await fn()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/service/service_client.py", line 65, in _send_server_request
+    await self._writer.drain()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 392, in drain
+    await self._protocol._drain_helper()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 166, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2025-09-10 12:52:18,391 ERROR   wandb-AsyncioManager-main:1196775 [asyncio_manager.py:fn_wrap_exceptions():183] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/asyncio_manager.py", line 181, in fn_wrap_exceptions
+    await fn()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/service/service_client.py", line 65, in _send_server_request
+    await self._writer.drain()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 392, in drain
+    await self._protocol._drain_helper()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 166, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost
+2025-09-10 12:52:18,397 ERROR   wandb-AsyncioManager-main:1196775 [asyncio_manager.py:fn_wrap_exceptions():183] Uncaught exception in run_soon callback.
+Traceback (most recent call last):
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/asyncio_manager.py", line 181, in fn_wrap_exceptions
+    await fn()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/site-packages/wandb/sdk/lib/service/service_client.py", line 65, in _send_server_request
+    await self._writer.drain()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 392, in drain
+    await self._protocol._drain_helper()
+  File "/src/gs25049/.conda/envs/research/lib/python3.11/asyncio/streams.py", line 166, in _drain_helper
+    raise ConnectionResetError('Connection lost')
+ConnectionResetError: Connection lost

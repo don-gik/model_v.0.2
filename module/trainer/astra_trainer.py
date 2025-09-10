@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, DistributedSampler
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
-from module.model.encoder import ASTRAEnhancedEncoder
+from module.model.encoder import Encoder
 from module.model.decoder import AutoDecoder
 from module.model.transformer import ASTRA_Block
 from module.dataset.ensodataset import ENSODataset
@@ -14,6 +14,10 @@ import logging
 import sys
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader, RandomSampler, random_split
+
+from module.model.decoder.decoder import Decoder
+from module.model.decoder.hf_refine_decoder import FreqRefineDecoder
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 
@@ -142,16 +146,17 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
     decoder_sd = torch.load(decoder_ckpt, map_location="cpu")
 
     # --- Build models ---
-    encoder = ASTRAEnhancedEncoder(in_channels=6, embed_dim=256)
+    encoder = Encoder(in_channels=4, embed_dim=128, mid_dim=32)
     encoder.load_state_dict(encoder_sd)
 
     # Note: AutoDecoder takes encoder as argument but we only need its decoder part here
-    full_decoder = AutoDecoder(encoder)
+    base_dec = Decoder(in_channels=encoder.out_dim, out_channels=4, hidden=128, num_res=2, dropout=0.05, use_deconv=True)
+    dec = FreqRefineDecoder(base_dec, in_channels=encoder.out_dim, out_channels=4, cond_z=True, refine_width=96, refine_depth=3, dropout=0.05)
     try:
-        full_decoder.load_state_dict(decoder_sd)
+        dec.load_state_dict(decoder_sd)
     except:
         logger.info(f"Decoder loading failed.")
-    decoder_model = full_decoder.decoder
+    decoder_model = dec.decoder
 
     model = ASTRAAutoDecoder(encoder, decoder_model)
 
