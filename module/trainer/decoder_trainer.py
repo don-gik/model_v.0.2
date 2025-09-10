@@ -1,71 +1,56 @@
-import torch
-from torch.utils.data import Dataset, DataLoader
+import os
 import numpy as np
-from tqdm import tqdm
+import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+# --- plotting (headless) ---
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import wandb
+
 from module.model.encoder import Encoder
 from module.dataset.ensodataset import ENSOSkipGramDataset
 from module.model.decoder import AutoDecoder, FreqRefineDecoder
-import wandb
-import os
 
 
 def spectral_loss(pred: torch.Tensor, true: torch.Tensor) -> torch.Tensor:
     # pred/true: (B, T, C, H, W)
-    # 공간축에 대해 rfftn
     X = torch.fft.rfftn(pred, dim=(-2, -1))
     Y = torch.fft.rfftn(true, dim=(-2, -1))
     return torch.mean(torch.abs(X - Y))
 
-# --- NEW: add imports ---
-import numpy as np
-import matplotlib.pyplot as plt
-import wandb
 
-# --- NEW: nice panel for (target, pred, diff) ---
 def _panel_pred_vs_target(pred: torch.Tensor, target: torch.Tensor, item: int = 0, max_channels: int = 3):
-    """
-    pred/target: [B, C, H, W]
-    하나의 배치 샘플(item)에 대해 상위 max_channels개 채널을 (Target | Pred | Diff) 3열 패널로 시각화
-    """
     with torch.no_grad():
         pred_np   = pred[item].detach().cpu().numpy()   # [C, H, W]
         target_np = target[item].detach().cpu().numpy() # [C, H, W]
-
         C, H, W = pred_np.shape
         show_c = min(C, max_channels)
 
         fig, axes = plt.subplots(show_c, 3, figsize=(9, 3 * show_c))
         if show_c == 1:
-            axes = np.expand_dims(axes, axis=0)  # shape 통일
+            axes = np.expand_dims(axes, axis=0)
 
         for c in range(show_c):
-            p = pred_np[c]
-            t = target_np[c]
-            diff = p - t
-
-            # 컬러 스케일을 pred/target 공통으로 맞춤 (퍼센타일 기반으로 이상치 완화)
+            p = pred_np[c]; t = target_np[c]; diff = p - t
             vmin = np.percentile(np.concatenate([p.ravel(), t.ravel()]), 1)
             vmax = np.percentile(np.concatenate([p.ravel(), t.ravel()]), 99)
 
-            axes[c, 0].imshow(t, vmin=vmin, vmax=vmax)
-            axes[c, 0].set_title(f"Ch{c} Target"); axes[c, 0].axis("off")
-
-            axes[c, 1].imshow(p, vmin=vmin, vmax=vmax)
-            axes[c, 1].set_title(f"Ch{c} Pred"); axes[c, 1].axis("off")
-
-            # 차이는 0 중심으로 보기 좋게
+            axes[c, 0].imshow(t, vmin=vmin, vmax=vmax); axes[c, 0].set_title(f"Ch{c} Target"); axes[c, 0].axis("off")
+            axes[c, 1].imshow(p, vmin=vmin, vmax=vmax); axes[c, 1].set_title(f"Ch{c} Pred");   axes[c, 1].axis("off")
             d_abs = np.percentile(np.abs(diff.ravel()), 99)
-            axes[c, 2].imshow(diff, vmin=-d_abs, vmax=+d_abs)
-            axes[c, 2].set_title(f"Ch{c} Diff"); axes[c, 2].axis("off")
+            axes[c, 2].imshow(diff, vmin=-d_abs, vmax=+d_abs); axes[c, 2].set_title(f"Ch{c} Diff"); axes[c, 2].axis("off")
 
         plt.tight_layout()
         return fig
 
-# --- (선택) 채널별 RMSE 계산 ---
+
 def _per_channel_rmse(pred: torch.Tensor, target: torch.Tensor):
-    # [B, C, H, W] -> [C]
     with torch.no_grad():
         rmse = torch.sqrt(((pred - target) ** 2).mean(dim=(0, 2, 3)))
         return rmse.detach().cpu().numpy()
@@ -73,7 +58,6 @@ def _per_channel_rmse(pred: torch.Tensor, target: torch.Tensor):
 
 def main():
     wandb.init(project='Decoder Training')
-    # (선택) 러닝 설정 기록
     wandb.config.update({
         "batch_size": 32,
         "epochs": 250,
@@ -86,24 +70,26 @@ def main():
     batch_size = 32
     epochs = 250
 
+    # --- data ---
     npz = np.load("./data/enso_normalized.npz")
     base_data = npz['data'][:, :, :40, :200]
     dataset = ENSOSkipGramDataset(base_data, num_samples=2048*4)
+    num_workers = 4 if device.type == 'cuda' else 0
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=num_workers,
         pin_memory=(device.type == 'cuda'),
-        persistent_workers=True,
-        prefetch_factor=4,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=(4 if num_workers > 0 else None),
     )
 
+    # --- model ---
     encoder = Encoder(in_channels=4, embed_dim=128, mid_dim=32).to(device)
     encoder.load_state_dict(torch.load("./models/astra_encoder.pth", map_location=device))
-    # Build base auto-decoder (encoder frozen by default)
     decoder_model = AutoDecoder(encoder, freeze_encoder=False).to(device)
-    # Wrap its decoder with high-frequency refinement (keeps old decoder intact)
+
     base_dec = decoder_model.decoder
     decoder_model.decoder = FreqRefineDecoder(
         base_decoder=base_dec,
@@ -115,18 +101,19 @@ def main():
         dropout=0.05,
     ).to(device)
 
-    # Fused Adam when available
-    try:
-        optimizer = optim.AdamW(decoder_model.decoder.parameters(), lr=1e-4, fused=True)
-    except TypeError:
-        optimizer = optim.AdamW(decoder_model.decoder.parameters(), lr=1e-4)
+    # ---- critical: unify dtype/device for optimizer safety ----
+    decoder_model.decoder.to(device=device, dtype=torch.float32)
+    for m in decoder_model.decoder.modules():
+        if isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.LayerNorm)):
+            m.float()
+
+    # --- optimizer (no fused) ---
+    optimizer = optim.AdamW(decoder_model.decoder.parameters(), lr=1e-4, fused=False, foreach=True)
     criterion = nn.MSELoss()
 
-    # --- NEW: wandb.watch로 grad/weights 자동 로깅 ---
     wandb.watch(decoder_model.decoder, log="all", log_freq=100)
 
-    # --- checkpoint 로드 ---
-    # Load checkpoints with backward compatibility
+    # --- checkpoints (best-effort) ---
     loaded = False
     for ck in ["./models/auto_decoder_hf.pth", "./models/auto_decoder.pth"]:
         try:
@@ -136,14 +123,13 @@ def main():
             loaded = True
             break
         except FileNotFoundError:
-            continue
+            pass
         except Exception as e:
             print(f"⚠️ 로드 실패 ({ck}): {e}")
-    # Optionally load base decoder only if available
+
     if not loaded:
         try:
             base_sd = torch.load("./models/decoder.pth", map_location=device)
-            # If wrapped, load into the base submodule
             if isinstance(decoder_model.decoder, FreqRefineDecoder):
                 decoder_model.decoder.base.load_state_dict(base_sd, strict=False)
             else:
@@ -155,21 +141,24 @@ def main():
             print(f"⚠️ 기본 디코더 로드 실패: {e}")
 
     decoder_model.train()
-    scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
+    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
+
     for epoch in range(epochs):
         total_loss = 0.0
+        vis_anchor_cpu = None  # 첫 배치 일부를 저장해 epoch-end 시각화에 재사용
 
         for step, (anchor, _, _) in enumerate(tqdm(dataloader, desc=f"Epoch {epoch+1}")):
+            if vis_anchor_cpu is None:
+                vis_anchor_cpu = anchor[:8].detach().cpu()
+
             x = anchor.unsqueeze(1).to(device, non_blocking=True)  # [B, 1, C, H, W]
             target = anchor.to(device, non_blocking=True)          # [B, C, H, W]
 
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
-                pred = decoder_model(x)             # [B, C, H, W]
-                # Avoid computing spectral loss unless weighted > 0 to save GPU mem
-                spec_w = 0.0
+            with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')):
+                pred = decoder_model(x)  # [B, C, H, W]
                 loss = criterion(pred, target)
-                if spec_w > 0.0:
-                    loss = loss + spec_w * spectral_loss(pred, target)
+                # spec_w=0.0 → 사용 안 함 (GPU 메모리 절약)
+                # 필요 시: loss = loss + spec_w * spectral_loss(pred.unsqueeze(1), target.unsqueeze(1))
 
             optimizer.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
@@ -178,44 +167,36 @@ def main():
 
             total_loss += loss.item()
 
-            # --- NEW: step별 (드문 간격) 미니 로깅 ---
             if step % 50 == 0:
-                # 채널별 RMSE (현재 배치 기준)
                 rmse = _per_channel_rmse(pred, target)
-                ch_logs = {f"rmse/ch{c}": float(v) for c, v in enumerate(rmse)}
                 wandb.log({
-                    "train/step_loss": loss.item(),
-                    "train/lr": optimizer.param_groups[0]["lr"],
-                    **ch_logs
+                    "train/step_loss": float(loss.item()),
+                    "train/lr": float(optimizer.param_groups[0]["lr"]),
+                    **{f"rmse/ch{c}": float(v) for c, v in enumerate(rmse)}
                 })
 
         avg_loss = total_loss / len(dataloader)
         print(f"[Epoch {epoch+1}] Loss: {avg_loss:.4f}")
+        wandb.log({"train/epoch_loss": float(avg_loss), "epoch": epoch + 1})
 
-        # --- epoch 스칼라 로깅 ---
-        wandb.log({"train/epoch_loss": avg_loss, "epoch": epoch + 1})
-
-        # --- NEW: epoch마다 시각화 이미지 로깅 (첫 배치만 재사용; 비용 절감하려면 간격 조절) ---
-        # dataloader에서 샘플 하나 뽑아 재시각화
+        # --- epoch visualize using saved first batch ---
         with torch.no_grad():
-            anchor_vis, _, _ = next(iter(dataloader))
-            x_vis = anchor_vis.unsqueeze(1).to(device, non_blocking=True)
-            t_vis = anchor_vis.to(device, non_blocking=True)
-            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+            anchor_vis = vis_anchor_cpu.to(device)
+            x_vis = anchor_vis.unsqueeze(1)
+            t_vis = anchor_vis
+            with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')):
                 p_vis = decoder_model(x_vis)
 
             fig = _panel_pred_vs_target(p_vis, t_vis, item=0, max_channels=3)
             wandb.log({"viz/pred_vs_target": wandb.Image(fig), "epoch": epoch + 1})
             plt.close(fig)
 
-            # (선택) epoch 기준 채널별 RMSE
             rmse_epoch = _per_channel_rmse(p_vis, t_vis)
             wandb.log({**{f"rmse_epoch/ch{c}": float(v) for c, v in enumerate(rmse_epoch)},
-           "epoch": epoch + 1})
+                       "epoch": epoch + 1})
 
-        # --- checkpoint 저장 ---
-        # Save base decoder and HF-enhanced full model
-        # If wrapped, save the base decoder separately for compatibility
+        # --- save checkpoints ---
+        os.makedirs("./models", exist_ok=True)
         if isinstance(decoder_model.decoder, FreqRefineDecoder):
             torch.save(decoder_model.decoder.base.state_dict(), "./models/decoder.pth")
             torch.save(decoder_model.decoder.state_dict(), "./models/decoder_hf.pth")
@@ -223,3 +204,7 @@ def main():
         else:
             torch.save(decoder_model.decoder.state_dict(), "./models/decoder.pth")
             torch.save(decoder_model.state_dict(), "./models/auto_decoder.pth")
+
+
+if __name__ == "__main__":
+    main()

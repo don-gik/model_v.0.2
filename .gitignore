@@ -4,3 +4,5 @@ data
 .vscode
 models
 __pycache__
+
+wandb

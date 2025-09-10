@@ -97,7 +97,7 @@ def rmse_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-8) -> to
 
 # --- Define ASTRA AutoDecoder ---
 class ASTRAAutoDecoder(nn.Module):
-    def __init__(self, encoder, decoder, dim=256, T=60, H=20, W=100):
+    def __init__(self, encoder, decoder, dim=128, T=60, H=20, W=100):
         super().__init__()
         self.encoder = encoder
         self.transformer = ASTRA_Block(dim, T, H, W)
@@ -156,7 +156,7 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
         dec.load_state_dict(decoder_sd)
     except:
         logger.info(f"Decoder loading failed.")
-    decoder_model = dec.decoder
+    decoder_model = dec
 
     model = ASTRAAutoDecoder(encoder, decoder_model)
 
@@ -302,10 +302,23 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
                 pred_map = vis_pred[0, var_idx, t]
                 diff_map = pred_map - true_map
 
+                pair = np.concatenate([true_map.ravel(), pred_map.ravel()])
+                vmin = float(np.percentile(pair, 1))
+                vmax = float(np.percentile(pair, 99))
+                max_diff = float(np.percentile(np.abs(diff_map).ravel(), 99))
+                if vmax <= vmin:
+                    vmax = vmin + 1e-6
+                if max_diff <= 0:
+                    max_diff = 1e-6
+
+                true_img = _to_colormap_image(true_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                pred_img = _to_colormap_image(pred_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                diff_img = _to_colormap_image(diff_map, vmin=-max_diff, vmax=+max_diff, cmap_name='bwr')
+
                 wandb.log({
-                    f"true_map/u10 epoch{epoch+1}": wandb.Image(true_map, caption=f"True - epoch {epoch+1}"),
-                    f"pred_map/u10 epoch{epoch+1}": wandb.Image(pred_map, caption=f"Predicted - epoch {epoch+1}"),
-                    f"diff_map/u10 epoch{epoch+1}": wandb.Image(diff_map, caption=f"Diff - epoch {epoch+1}")
+                    f"true_map/u10 epoch{epoch+1}": wandb.Image(true_img, caption=f"True - epoch {epoch+1}"),
+                    f"pred_map/u10 epoch{epoch+1}": wandb.Image(pred_img, caption=f"Predicted - epoch {epoch+1}"),
+                    f"diff_map/u10 epoch{epoch+1}": wandb.Image(diff_img, caption=f"Diff - epoch {epoch+1}")
                 }, step=(epoch + 1) * len(loader))
 
                 var_idx = 1
@@ -314,10 +327,23 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
                 pred_map = vis_pred[0, var_idx, t]
                 diff_map = pred_map - true_map
 
+                pair = np.concatenate([true_map.ravel(), pred_map.ravel()])
+                vmin = float(np.percentile(pair, 1))
+                vmax = float(np.percentile(pair, 99))
+                max_diff = float(np.percentile(np.abs(diff_map).ravel(), 99))
+                if vmax <= vmin:
+                    vmax = vmin + 1e-6
+                if max_diff <= 0:
+                    max_diff = 1e-6
+
+                true_img = _to_colormap_image(true_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                pred_img = _to_colormap_image(pred_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                diff_img = _to_colormap_image(diff_map, vmin=-max_diff, vmax=+max_diff, cmap_name='bwr')
+
                 wandb.log({
-                    f"true_map/v10 epoch{epoch+1}": wandb.Image(true_map, caption=f"True - epoch {epoch+1}"),
-                    f"pred_map/v10 epoch{epoch+1}": wandb.Image(pred_map, caption=f"Predicted - epoch {epoch+1}"),
-                    f"diff_map/v10 epoch{epoch+1}": wandb.Image(diff_map, caption=f"Diff - epoch {epoch+1}")
+                    f"true_map/v10 epoch{epoch+1}": wandb.Image(true_img, caption=f"True - epoch {epoch+1}"),
+                    f"pred_map/v10 epoch{epoch+1}": wandb.Image(pred_img, caption=f"Predicted - epoch {epoch+1}"),
+                    f"diff_map/v10 epoch{epoch+1}": wandb.Image(diff_img, caption=f"Diff - epoch {epoch+1}")
                 }, step=(epoch + 1) * len(loader))
 
                 var_idx = 2
@@ -326,10 +352,23 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
                 pred_map = vis_pred[0, var_idx, t]
                 diff_map = pred_map - true_map
 
+                pair = np.concatenate([true_map.ravel(), pred_map.ravel()])
+                vmin = float(np.percentile(pair, 1))
+                vmax = float(np.percentile(pair, 99))
+                max_diff = float(np.percentile(np.abs(diff_map).ravel(), 99))
+                if vmax <= vmin:
+                    vmax = vmin + 1e-6
+                if max_diff <= 0:
+                    max_diff = 1e-6
+
+                true_img = _to_colormap_image(true_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                pred_img = _to_colormap_image(pred_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                diff_img = _to_colormap_image(diff_map, vmin=-max_diff, vmax=+max_diff, cmap_name='bwr')
+
                 wandb.log({
-                    f"true_map/msl epoch{epoch+1}": wandb.Image(true_map, caption=f"True - epoch {epoch+1}"),
-                    f"pred_map/msl epoch{epoch+1}": wandb.Image(pred_map, caption=f"Predicted - epoch {epoch+1}"),
-                    f"diff_map/msl epoch{epoch+1}": wandb.Image(diff_map, caption=f"Diff - epoch {epoch+1}")
+                    f"true_map/msl epoch{epoch+1}": wandb.Image(true_img, caption=f"True - epoch {epoch+1}"),
+                    f"pred_map/msl epoch{epoch+1}": wandb.Image(pred_img, caption=f"Predicted - epoch {epoch+1}"),
+                    f"diff_map/msl epoch{epoch+1}": wandb.Image(diff_img, caption=f"Diff - epoch {epoch+1}")
                 }, step=(epoch + 1) * len(loader))
 
                 var_idx = 3
@@ -338,10 +377,23 @@ def train_astra_autodecoder(encoder_ckpt, decoder_ckpt, data_path, save_path,
                 pred_map = vis_pred[0, var_idx, t]
                 diff_map = pred_map - true_map
 
+                pair = np.concatenate([true_map.ravel(), pred_map.ravel()])
+                vmin = float(np.percentile(pair, 1))
+                vmax = float(np.percentile(pair, 99))
+                max_diff = float(np.percentile(np.abs(diff_map).ravel(), 99))
+                if vmax <= vmin:
+                    vmax = vmin + 1e-6
+                if max_diff <= 0:
+                    max_diff = 1e-6
+
+                true_img = _to_colormap_image(true_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                pred_img = _to_colormap_image(pred_map, vmin=vmin, vmax=vmax, cmap_name='RdBu_r')
+                diff_img = _to_colormap_image(diff_map, vmin=-max_diff, vmax=+max_diff, cmap_name='bwr')
+
                 wandb.log({
-                    f"true_map/sst epoch{epoch+1}": wandb.Image(true_map, caption=f"True - epoch {epoch+1}"),
-                    f"pred_map/sst epoch{epoch+1}": wandb.Image(pred_map, caption=f"Predicted - epoch {epoch+1}"),
-                    f"diff_map/sst epoch{epoch+1}": wandb.Image(diff_map, caption=f"Diff - epoch {epoch+1}")
+                    f"true_map/sst epoch{epoch+1}": wandb.Image(true_img, caption=f"True - epoch {epoch+1}"),
+                    f"pred_map/sst epoch{epoch+1}": wandb.Image(pred_img, caption=f"Predicted - epoch {epoch+1}"),
+                    f"diff_map/sst epoch{epoch+1}": wandb.Image(diff_img, caption=f"Diff - epoch {epoch+1}")
                 }, step=(epoch + 1) * len(loader))
 
         accelerator.wait_for_everyone()
@@ -376,11 +428,39 @@ def plot_prediction_numpy(y_true, y_pred, epoch, var_idx=0, save_path="epoch_vis
     plt.savefig(save_path)
     plt.close()
 
+# --- helpers for visualization so maps aren't black in W&B ---
+from matplotlib import cm as _mpl_cm
+
+def _to_colormap_image(arr, vmin=None, vmax=None, cmap_name='RdBu_r'):
+    """
+    Convert a 2D array to a color-mapped RGB uint8 image for logging.
+    Applies min-max (or provided) normalization and a matplotlib colormap.
+    """
+    a = np.asarray(arr)
+    if vmin is None:
+        vmin = float(np.min(a))
+    if vmax is None:
+        vmax = float(np.max(a))
+    if not np.isfinite(vmin):
+        vmin = 0.0
+    if not np.isfinite(vmax):
+        vmax = 1.0
+    if vmax <= vmin:
+        vmax = vmin + 1e-6
+
+    x = (a - vmin) / (vmax - vmin)
+    x = np.clip(x, 0.0, 1.0)
+
+    cmap = _mpl_cm.get_cmap(cmap_name)
+    rgba = cmap(x)  # [..., 4]
+    rgb = (rgba[..., :3] * 255.0).astype(np.uint8)
+    return rgb
+
 
 def main():
     train_astra_autodecoder(
         encoder_ckpt='./models/astra_encoder.pth',
-        decoder_ckpt='./models/auto_decoder.pth',
+        decoder_ckpt='./models/auto_decoder_hf.pth',
         data_path='./data/enso_normalized.npz',
         save_path='./models',
         batch_size=8,
