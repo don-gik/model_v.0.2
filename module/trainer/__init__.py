@@ -1,2 +1,2 @@
-import module.trainer.astra_trainer
+import module.trainer.whole_trainer
 import module.trainer.encoder_trainer
