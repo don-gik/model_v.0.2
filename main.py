@@ -41,6 +41,6 @@ if __name__ == "__main__":
     elif args.train == "whole":
         logging.info("The whole model is getting prepared for training.")
 
-        trainer.whole_trainer.main()
+        trainer.whole_trainer.run()
     else:
         logging.info(f"Training Failed. {args.train} is not detected.")

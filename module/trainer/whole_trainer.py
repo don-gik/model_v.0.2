@@ -470,7 +470,7 @@ def main(encoderDir : str,
     return
 
 
-if __name__ == "__main__":
+def run():
     main(
         encoderDir = "./models/encoder/encoder_best.pth",
         checkpointDir = "./models/whole",
