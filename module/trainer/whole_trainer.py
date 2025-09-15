@@ -304,8 +304,13 @@ def train(encoderDir : str,
             batchX = batchX[:, :inputDays].to(device)
             batchY = batchY[:, :targetDays].to(device)
 
+            logging.debug(f"batchX shape : {batchX.shape}")
+            logging.debug(f"batchY shape : {batchY.shape}")
+
             with accelerator.accumulate(model):
                 pred = model(batchX)
+
+                logging.debug(f"Prediction shape : {pred.shape}")
 
                 lossL1 = criterionL1(pred, batchY)
                 lossSsim = criterionSsim(pred, batchY)
