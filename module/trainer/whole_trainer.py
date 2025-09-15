@@ -32,7 +32,6 @@ import numpy as np
 
 
 
-
 class SSIMLoss(SSIM):
     """
     SSIM Loss for training criterion.
@@ -163,6 +162,8 @@ def train(encoderDir : str,
     # ---- What device? ----
     device = accelerator.device
 
+    logging.INFO(f"Using device {device}")
+
 
     # ---- wandb setup on main process ----
     if accelerator.is_main_process:
@@ -207,7 +208,8 @@ def train(encoderDir : str,
         model.encoder.load_state_dict(encoderCheckpoint)
     
     except Exception as e:
-        pass
+        logging.ERROR(f"Error : {e}")
+        logging.INFO("Encoder checkpoint not loaded.")
 
     try:
         # Load whole model checkpoint
@@ -215,7 +217,8 @@ def train(encoderDir : str,
         model.load_state_dict(modelCheckpoint)
     
     except Exception as e:
-        pass
+        logging.ERROR(f"Error : {e}")
+        logging.INFO("No checkpoint loaded for full model.")
 
     
     # ---- Setup optimizer, criterion and scheduler ----
@@ -249,6 +252,8 @@ def train(encoderDir : str,
         pin_memory = False
     )
     validationLoader = accelerator.prepare(validationLoader)
+
+    logging.INFO("Training fully prepared.")
 
 
 
