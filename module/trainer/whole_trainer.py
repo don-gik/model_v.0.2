@@ -162,7 +162,7 @@ def train(encoderDir : str,
     # ---- What device? ----
     device = accelerator.device
 
-    logging.INFO(f"Using device {device}")
+    logging.info(f"Using device {device}")
 
 
     # ---- wandb setup on main process ----
@@ -208,8 +208,8 @@ def train(encoderDir : str,
         model.encoder.load_state_dict(encoderCheckpoint)
     
     except Exception as e:
-        logging.ERROR(f"Error : {e}")
-        logging.INFO("Encoder checkpoint not loaded.")
+        logging.error(f"Error : {e}")
+        logging.info("Encoder checkpoint not loaded.")
 
     try:
         # Load whole model checkpoint
@@ -217,8 +217,8 @@ def train(encoderDir : str,
         model.load_state_dict(modelCheckpoint)
     
     except Exception as e:
-        logging.ERROR(f"Error : {e}")
-        logging.INFO("No checkpoint loaded for full model.")
+        logging.error(f"Error : {e}")
+        logging.info("No checkpoint loaded for full model.")
 
     
     # ---- Setup optimizer, criterion and scheduler ----
@@ -253,8 +253,8 @@ def train(encoderDir : str,
     )
     validationLoader = accelerator.prepare(validationLoader)
 
-    logging.INFO("Training fully prepared.")
-
+    logging.info("Training fully prepared.")
+    logging.info("Training loop started")
 
 
     # ---- Training Loop ----
@@ -297,7 +297,7 @@ def train(encoderDir : str,
             desc = f"Epoch[{epoch}] | R{accelerator.process_index}"
         )
 
-
+        logging.info(f"Epoch {epoch + 1} started")
         # ---- 1 Epoch Training Loop on freshly sampled dataset ----
         for step, (batchX, batchY) in enumerate(progressBar):
             batchX = batchX[:, :inputDays].to(device)
