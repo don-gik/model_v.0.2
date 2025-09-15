@@ -169,6 +169,7 @@ def train(encoderDir : str,
     if accelerator.is_main_process:
         wandb.init(
             project = "Axial Attention MLP",
+            name = "whole",
             config = {"lr" : lr, "batchSize" : batchSize, "epochs" : epochs}
         )
 

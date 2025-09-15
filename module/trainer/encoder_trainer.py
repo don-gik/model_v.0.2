@@ -77,7 +77,7 @@ def train_encoder(
         logging.info("Resumed from last checkpoint")
 
     if _WANDB:
-        wandb.init(project="Axial MHSA Encoder InfoNCE Training", reinit=True, config=dict(
+        wandb.init(project="Axial Attention MLP", name="Encoder", reinit=True, config=dict(
             lr=lr, batch_size=batch_size, epochs=epochs, temperature=temperature
         ))
 
