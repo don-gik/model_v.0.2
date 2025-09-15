@@ -396,14 +396,14 @@ def train(encoderDir : str,
 
                 pred = model(batchX)
 
-                if accelerator.is_main_process and not did_log_viz:
+                if accelerator.is_main_process and not didLogViz:
                     _wandb_log_lastday_panel(
                         pred=pred, target=batchY,
                         var_names=variableNames,
                         epoch=epoch,
                         step=(epoch + 1) * len(trainLoader)
                     )
-                    did_log_viz = True
+                    didLogViz = True
 
                 for i, name in enumerate(variableNames):
                     lossI = rmse_loss(pred[:, :, i], batchY[:, :, i])
