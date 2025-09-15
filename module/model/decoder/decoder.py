@@ -46,10 +46,17 @@ class Refine3D(nn.Module):
 
             nn.Conv3d(
                 in_channels = channels * 4,
-                out_channels = channels,
+                out_channels = channels * 4,
                 kernel_size = (1, 3, 3),
-                padding = (0, 1, 1),
-                groups = 4 * channels
+                padding = "same",
+                groups = channels
+            ),
+            nn.GELU(),
+
+            nn.Conv3d(
+                in_channels = channels * 4,
+                out_channels = channels,
+                kernel_size = 1
             ),
             nn.Dropout(drop)
         )
@@ -72,21 +79,21 @@ class RefineBlockDecoder(nn.Module):
         super().__init__()
 
         self.upsample = UpSample(channels = channels)
-        self.blocks = [Refine3D(
+        self.blocks = nn.ModuleList([Refine3D(
             channels = channels,
             drop = drop
-        ) for _ in range(depth)]
+        ) for _ in range(depth)])
 
         self.projection = nn.Conv3d(
             in_channels = channels,
             out_channels = outChannels
         )
     
-    def forward(self, x):    # x: [B, T, C, H, W]
-        z = self.upsample(x)
+    def forward(self, x):    # x: [B, T, C, H // 2, W // 2]
+        z = self.upsample(x.permute(0, 2, 1, 3, 4))
 
         for block in self.blocks:
-            z = block(z)
+            z = z + block(z)
         
-        out = self.projection(z)
+        out = self.projection(z).permute(0, 2, 1, 3, 4).contiguous()
         return out        

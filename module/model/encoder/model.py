@@ -85,7 +85,7 @@ class MHSAAttn(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias = False)
         self.proj = nn.Linear(dim, dim, bias = False)
 
-        self.scale = self.dh ** -0.5
+        self.scale = self.dimByHeads ** -0.5
     
     def forward(self, x):    # x: [B * nw, N, D]
         BatchNWindow, N, D = x.shape
@@ -115,6 +115,8 @@ class WindowBlock(nn.Module):
                  mlpRatio : float = 2.0,
                  dropout : float = 0.1
                  ):
+        
+        super().__init__()
         
         self.windowHeight = windowHeight
         self.windowWidth = windowWidth
@@ -166,7 +168,7 @@ class Encoder(nn.Module):
                                   out_channels = midDim,
                                   kernel_size = 3,
                                   padding = 1)
-        self.spatial = nn.Conv2d(in_channels = inChannels,
+        self.spatial = nn.Conv2d(in_channels = midDim,
                                  out_channels = midDim,
                                  kernel_size = 3,
                                  stride = 2,
@@ -175,10 +177,10 @@ class Encoder(nn.Module):
             nn.Conv2d(in_channels = midDim,
                       out_channels = midDim,
                       kernel_size = 3,
-                      padding = 1,
+                      padding = "same",
                       dilation = 2,
                       groups = midDim),
-            nn.BatchNorm2D(midDim),
+            nn.BatchNorm2d(midDim),
             nn.GELU(),
             nn.Conv2d(midDim, midDim, 1)
         )

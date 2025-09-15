@@ -6,3 +6,7 @@ models
 __pycache__
 
 wandb
+
+*.log
+
+./wandb

@@ -108,7 +108,7 @@ def train_encoder(
             negatives = negatives.to(device, non_blocking=True).reshape(B * N, C, H, W).unsqueeze(1)
 
             optimizer.zero_grad(set_to_none=True)
-            with autocast(device_type=device.type, dtype=torch.bfloat16 if device.type == "cuda" else None):
+            with autocast(dtype=torch.bfloat16):
                 z_anchor = encoder(anchor).flatten(1)                 # [B, D]
                 z_pos    = encoder(positive).flatten(1).unsqueeze(1)  # [B, 1, D]
                 z_neg    = encoder(negatives).flatten(1).reshape(B, N, -1)  # [B, N, D]
@@ -146,6 +146,9 @@ def train_encoder(
 def main():
     npz = np.load("./data/enso_normalized.npz")
     base_npz_data = npz["data"][:, :, :40, :200]  # [T, C, H, W]
+
+    if not os.path.exists("data"):
+        os.mkdir("data")
 
     encoder = Encoder()
     train_encoder(
