@@ -86,7 +86,8 @@ class RefineBlockDecoder(nn.Module):
 
         self.projection = nn.Conv3d(
             in_channels = channels,
-            out_channels = outChannels
+            out_channels = outChannels,
+            kernel_size = 1
         )
     
     def forward(self, x):    # x: [B, T, C, H // 2, W // 2]

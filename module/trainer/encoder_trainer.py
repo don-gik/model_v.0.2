@@ -69,15 +69,15 @@ def train_encoder(
     scaler = GradScaler(enabled=(device.type == "cuda"))
 
     # Try resume
-    last_ckpt = Path(ckpt_dir) / "astra_encoder_last.pth"
-    best_ckpt = Path(ckpt_dir) / "astra_encoder_best.pth"
+    last_ckpt = Path(ckpt_dir) / "encoder_last.pth"
+    best_ckpt = Path(ckpt_dir) / "encoder_best.pth"
     best_loss = float("inf")
     if last_ckpt.exists():
         encoder.load_state_dict(torch.load(last_ckpt, map_location=device))
         logging.info("Resumed from last checkpoint")
 
     if _WANDB:
-        wandb.init(project="astra-encoder-infonce", reinit=True, config=dict(
+        wandb.init(project="Axial MHSA Encoder InfoNCE Training", reinit=True, config=dict(
             lr=lr, batch_size=batch_size, epochs=epochs, temperature=temperature
         ))
 

@@ -168,7 +168,7 @@ def train(encoderDir : str,
     # ---- wandb setup on main process ----
     if accelerator.is_main_process:
         wandb.init(
-            project = "Axial Attention MLP Training",
+            project = "Axial Attention MLP",
             config = {"lr" : lr, "batchSize" : batchSize, "epochs" : epochs}
         )
 
@@ -177,7 +177,7 @@ def train(encoderDir : str,
         npz_path = dataPath,
         input_days = inputDays,
         target_days = targetDays,
-        start_data = "1941-01-01",
+        start_date = "1941-01-01",
         base_date = "1941-01-01",
         dt_hours = 24
     )
