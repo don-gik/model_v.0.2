@@ -38,13 +38,9 @@ if __name__ == "__main__":
         logging.info("Encoder is getting prepared for training.")
 
         trainer.encoder_trainer.main()
-    elif args.train == "decoder":
-        logging.info("Decoder is getting prepared for training.")
-
-        trainer.decoder_trainer.main()
     elif args.train == "whole":
         logging.info("The whole model is getting prepared for training.")
 
-        trainer.astra_trainer.main()
+        trainer.whole_trainer.main()
     else:
         logging.info(f"Training Failed. {args.train} is not detected.")
