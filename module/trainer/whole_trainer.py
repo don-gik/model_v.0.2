@@ -307,8 +307,8 @@ def train(encoderDir : str,
                 pred = model(batchX)
 
                 lossL1 = criterionL1(pred, batchY)
-                lossSsim = (1.0 - criterionSsim(pred, batchY))
-                loss = lossL1 + lossSsim
+                lossSsim = criterionSsim(pred, batchY)
+                loss = lossL1 + lossSsim * 0.1
 
                 optimizer.zero_grad()
                 accelerator.backward(loss)
@@ -412,7 +412,7 @@ def train(encoderDir : str,
 
                 for i, name in enumerate(variableNames):
                     lossI = rmse_loss(pred[:, :, i], batchY[:, :, i])
-                    lossIssim = 1.0 - SSIMLoss(pred[:, :, i], batchY[:, :, i])
+                    lossIssim = SSIMLoss(pred[:, :, i], batchY[:, :, i])
 
                     variableLoss[name]['rmse'] += lossI.item()
                     variableLoss[name]['ssim'] += lossIssim.item()
