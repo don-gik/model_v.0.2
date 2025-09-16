@@ -90,11 +90,12 @@ class RefineBlockDecoder(nn.Module):
             kernel_size = 1
         )
     
-    def forward(self, x):    # x: [B, T, C, H // 2, W // 2]
-        z = self.upsample(x.permute(0, 2, 1, 3, 4))
+    def forward(self, x):    # x: [B, C, H // 2, W // 2]
+        z = x.unsqueeze(1)
+        z = self.upsample(z.permute(0, 2, 1, 3, 4))
 
         for block in self.blocks:
             z = z + block(z)
         
         out = self.projection(z).permute(0, 2, 1, 3, 4).contiguous()
-        return out        
+        return out.squeeze()

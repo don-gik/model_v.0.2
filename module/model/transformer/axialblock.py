@@ -59,11 +59,11 @@ class PositionalEncoding3D(nn.Module):
         B, T, C, H, W = x.shape
         assert T <= self.T and H <= self.H and W <= self.W
 
-        x = x + self.absolute[:, :T, :C, :H, :W].to(x.dtype, x.device)
+        x = x + self.absolute[:, :T, :C, :H, :W].to(device = x.device, dtype = x.dtype)
 
-        encodeT = self.encodeT[:T].to(x.dtype, x.device)[:, None, None, :]    # [T, 1, 1, 2 * Bands]
-        encodeH = self.encodeH[:H].to(x.dtype, x.device)[None, :, None, :]    # [1, H, 1, 2 * Bands]
-        encodeW = self.encodeW[:W].to(x.dtype, x.device)[None, None, :, :]    # [1, 1, W, 2 * Bands]
+        encodeT = self.encodeT[:T].to(device = x.device, dtype = x.dtype)[:, None, None, :]    # [T, 1, 1, 2 * Bands]
+        encodeH = self.encodeH[:H].to(device = x.device, dtype = x.dtype)[None, :, None, :]    # [1, H, 1, 2 * Bands]
+        encodeW = self.encodeW[:W].to(device = x.device, dtype = x.dtype)[None, None, :, :]    # [1, 1, W, 2 * Bands]
 
         encodeTotal = torch.cat([
             encodeT.expand(T, H, W, -1),
@@ -134,6 +134,8 @@ class AxialAttention(nn.Module):
             info = ("width", B, T, C, H, W)
         else:
             raise RuntimeError(f"Axis {self.axis} does not exist")
+
+        return sequence, info
     
     def _invert(self, y, info):    # y: [N, L, C]
         axis, B, T, C, H, W = info
@@ -151,17 +153,22 @@ class AxialAttention(nn.Module):
         sequence, info = self._reshape(x)    # sequence: [N, L, C]
         N, L, C = sequence.shape
 
-        q, k, v = self.qkv(sequence).chunk(dim = 1)    # q, k, v: [N, L, C]
+        qkv = self.qkv(sequence)
+        q, k, v = torch.chunk(
+            input = qkv,
+            chunks = 3,
+            dim = -1
+        )    # q, k, v: [N, L, C]
 
         def split(t):
-            return t.view(N, L, self.h, self.d).transpose(1, 2).contiguous()
+            return t.view(N, L, self.heads, self.dim).transpose(1, 2).contiguous()
         
         q, k, v = map(split, (q, k, v))    # q, k, v: [N, h, L, d]
 
 
         outChunks = []
 
-        relativeBias = relativeBias.to(dtype = q.dtype, device = q.device)    # relativeBias: [1, h, L, L]
+        relativeBias = relativeBias.to(device = q.device, dtype = q.dtype)    # relativeBias: [1, h, L, L]
         step = self.lineChunk
         for i in range(0, N, step):
             qi, ki, vi = q[i:i+step], k[i:i+step], v[i:i+step]
@@ -170,7 +177,7 @@ class AxialAttention(nn.Module):
 
             oi = attn @ vi    # oi: [n, h, L, d]
             oi = oi.transpose(1, 2).reshape(oi.size(0), L, C)    # oi: [n, L, C]
-            outChunks.append(self.proj(oi))    # self.proj: [n, L, C]
+            outChunks.append(self.projection(oi))    # self.projection: [n, L, C]
         
         out = torch.cat(outChunks, dim = 0)    # out: [N, L, C]
 
@@ -197,7 +204,7 @@ class MultiLayerPerceptron3D(nn.Module):
             nn.GELU(),
 
             DepthwiseConv3d(
-                in_channels = 4 * C,
+                channels = 4 * C,
                 kernel = (1, 3, 3),
                 padding = (0, 1, 1)
             ),
@@ -257,7 +264,7 @@ class AxialBlockMLP(nn.Module):
             heads = heads,
             axis = "height"
         )
-        self.attnT = AxialAttention(
+        self.attnW = AxialAttention(
             C = C,
             heads = heads,
             axis = "width"
@@ -288,6 +295,11 @@ class AxialBlockMLP(nn.Module):
         if self.postAttnConv.bias is not None:
             nn.init.zeros_(self.postAttnConv.bias)
     
+    @staticmethod
+    def _layernorm_last(x, layerNorm):
+        xCl = x.permute(0, 1, 3, 4, 2).contiguous()
+        xCl = layerNorm(xCl)
+        return xCl.permute(0, 1, 4, 2, 3).contiguous()
 
     def forward(self, x):    # x: [B, T, C, H, W]
         x, biasT, biasH, biasW = self.positionalEncoding(x)
@@ -296,9 +308,13 @@ class AxialBlockMLP(nn.Module):
         xPre = xPre + self.dropPre(self.betaPre * self.preMLP(xPre))
         x = xPre.permute(0, 2, 1, 3, 4).contiguous()
 
-        t = self.attnT(self.normalizeT(x), biasT)
-        h = self.attnH(self.normalizeH(x), biasH)
-        w = self.attnW(self.normalizeW(x), biasW)
+        xT = self._layernorm_last(x, self.normalizeT)
+        xH = self._layernorm_last(x, self.normalizeH)
+        xW = self._layernorm_last(x, self.normalizeW)
+
+        t = self.attnT(xT, biasT)
+        h = self.attnH(xH, biasH)
+        w = self.attnW(xW, biasW)
 
         a = (self.weightT * t) + (self.weightH * h) + (self.weightW * w)    # a: [B, T, C, H, W]
 

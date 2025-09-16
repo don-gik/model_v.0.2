@@ -157,7 +157,8 @@ def train(encoderDir : str,
     """
     # ---- Kwargs settings for Accelerator setup ----
     ddpKwargs = DistributedDataParallelKwargs(find_unused_parameters=False)
-    accelerator = Accelerator(kwargs_handlers = [ddpKwargs])
+    accelerator = Accelerator(mixed_precision = "bf16",kwargs_handlers = [ddpKwargs])
+    torch.backends.cuda.matmul.allow_tf32 = True
 
     # ---- What device? ----
     device = accelerator.device
@@ -228,8 +229,17 @@ def train(encoderDir : str,
         lr = lr
     )
 
-    criterionL1 = nn.SmoothL1Loss()
-    criterionSsim = SSIMLoss()
+    C = 4
+    criterionL1 = nn.SmoothL1Loss().to(device)
+
+    k = 3.0
+    low, high = -k, k
+    criterionSsim = SSIMLoss(
+        n_channels = C
+    ).to(device)
+    criterionSsim1 = SSIMLoss(
+        n_channels = 1
+    ).to(device)
 
     scheduler = OneCycleLR(
         optimizer = optimizer,
@@ -268,7 +278,7 @@ def train(encoderDir : str,
         l1Loss = 0.0
 
         # Sampling the Train Dataloader
-        generator = torch.Generator().manual_seed(random.randint())
+        generator = torch.Generator().manual_seed(random.randint(1, 100000))
 
         sampler = RandomSampler(
             data_source = trainDataset,
@@ -304,16 +314,20 @@ def train(encoderDir : str,
             batchX = batchX[:, :inputDays].to(device)
             batchY = batchY[:, :targetDays].to(device)
 
-            logging.debug(f"batchX shape : {batchX.shape}")
-            logging.debug(f"batchY shape : {batchY.shape}")
+            torch.cuda.empty_cache()
 
             with accelerator.accumulate(model):
                 pred = model(batchX)
 
-                logging.debug(f"Prediction shape : {pred.shape}")
+                def to01(x, k): return ((x.clamp(-k, k) + k) / (2*k))
+
+                lastPred = pred[:, -1]      # [B,C,H,W]
+                lastTrue = batchY[:, -1]    # [B,C,H,W]
 
                 lossL1 = criterionL1(pred, batchY)
-                lossSsim = criterionSsim(pred, batchY)
+                lossSsim = criterionSsim(to01(lastPred, k).float(), to01(lastTrue, k).float())
+
+                del lastPred, lastTrue
                 loss = lossL1 + lossSsim * 0.1
 
                 optimizer.zero_grad()
@@ -417,8 +431,8 @@ def train(encoderDir : str,
                     didLogViz = True
 
                 for i, name in enumerate(variableNames):
-                    lossI = rmse_loss(pred[:, :, i], batchY[:, :, i])
-                    lossIssim = SSIMLoss(pred[:, :, i], batchY[:, :, i])
+                    lossI = rmse_loss(pred[:, -1, i], batchY[:, -1, i])
+                    lossIssim = criterionSsim1(pred[:, -1, i].unsqueeze(1), batchY[:, -1, i].unsqueeze(1))
 
                     variableLoss[name]['rmse'] += lossI.item()
                     variableLoss[name]['ssim'] += lossIssim.item()
