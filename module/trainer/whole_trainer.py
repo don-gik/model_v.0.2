@@ -267,6 +267,10 @@ def train(encoderDir : str,
     logging.info("Training loop started")
 
 
+    if not os.path.exists(checkpointDir):
+        os.mkdir(checkpointDir)
+
+
     # ---- Training Loop ----
     for epoch in tqdm(range(epochs)):
         # model training mode
