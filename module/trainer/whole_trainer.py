@@ -88,7 +88,6 @@ class AxialPrediction(nn.Module):
         )
 
         self.prediction = prediction
-    
 
     def forward(self, x):    # x: [B, T, C, H, W]
         B, T, C, H, W = x.shape
@@ -328,7 +327,7 @@ def train(encoderDir : str,
                 lossSsim = criterionSsim(to01(lastPred, k).float(), to01(lastTrue, k).float())
 
                 del lastPred, lastTrue
-                loss = lossL1 + lossSsim * 0.1
+                loss = lossL1 + lossSsim * 0.2
 
                 optimizer.zero_grad()
                 accelerator.backward(loss)

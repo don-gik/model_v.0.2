@@ -8,6 +8,8 @@ from module.model.transformer.utils import DropPath, DepthwiseConv3d
 
 
 
+
+
 class PositionalEncoding3D(nn.Module):
     def __init__(self,
                  T : int,
@@ -141,11 +143,11 @@ class AxialAttention(nn.Module):
         axis, B, T, C, H, W = info
 
         if axis == "time":
-            return y.view(B, T, C, H, W).contiguous()
+            return y.view(B, H, W, T, C).permute(0, 3, 4, 1, 2).contiguous()
         elif axis == "height":
-            return y.view(B, T, C, H, W).contiguous()
+            return y.view(B, T, W, H, C).permute(0, 1, 4, 3, 2).contiguous()
         elif axis == "width":
-            return y.view(B, T, C, H, W).contiguous()
+            return y.view(B, T, H, W, C).permute(0, 1, 4, 2, 3).contiguous()
         else:
             raise RuntimeError(f"Axis {axis} does not exist")
     
@@ -173,7 +175,7 @@ class AxialAttention(nn.Module):
         for i in range(0, N, step):
             qi, ki, vi = q[i:i+step], k[i:i+step], v[i:i+step]
             attn = (qi @ ki.transpose(-2, -1)) * self.scale    # attn: [n h, L, L]
-            attn = (attn + relativeBias).softmax(dim = 1)
+            attn = (attn + relativeBias).softmax(dim = -1)
 
             oi = attn @ vi    # oi: [n, h, L, d]
             oi = oi.transpose(1, 2).reshape(oi.size(0), L, C)    # oi: [n, L, C]
@@ -319,11 +321,11 @@ class AxialBlockMLP(nn.Module):
         a = (self.weightT * t) + (self.weightH * h) + (self.weightW * w)    # a: [B, T, C, H, W]
 
         aConv = a.permute(0, 2, 1, 3, 4).contiguous()    # aConv: [B, C, T, H, W]
-        z1Conv = self.postAttnConv(aConv)
-        
+        z1Conv = self.dropAttn(self.postAttnConv(aConv) * self.betaAttn)
+
         z2 = z1Conv + self.dropFnn1(self.betaFnn1 * self.mlp1(z1Conv))
         z3 = z2     + self.dropFnn2(self.betaFnn2 * self.mlp2(z2))
 
 
         out = z3.permute(0, 2, 1, 3, 4).contiguous()    # out: [B, T, C, H, W]
-        return out
+        return out + x
