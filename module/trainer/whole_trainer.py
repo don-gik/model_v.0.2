@@ -260,7 +260,7 @@ def train(encoderDir : str,
     scheduler = OneCycleLR(
         optimizer = optimizer,
         max_lr = 1e-3,
-        steps_per_epoch = samplesPerEpoch // batchSize // accelerator.gradient_accumulation_steps,
+        steps_per_epoch = samplesPerEpoch // accelerator.gradient_accumulation_steps,
         epochs = epochs,
         pct_start = 0.44,
         anneal_strategy = 'cos'
@@ -374,15 +374,15 @@ def train(encoderDir : str,
                         "step_l1_loss" : lossL1.item(),
                         "learning_rate" : scheduler.get_lr()
                     },
-                    step = epoch * len(training) + step
+                    step = epoch * samplesPerEpoch + step
                 )
         
 
         # ---- if an epoch ends ----
         if accelerator.is_main_process:
-            totalLoss /= len(training)
-            ssimLoss  /= len(training)
-            l1Loss    /= len(training)
+            totalLoss /= samplesPerEpoch
+            ssimLoss  /= samplesPerEpoch
+            l1Loss    /= samplesPerEpoch
 
             wandb.log(
                 {
@@ -391,7 +391,7 @@ def train(encoderDir : str,
                     "ssim_loss" : ssimLoss,
                     "L1_loss"   : l1Loss
                 },
-                step = (epoch + 1) * len(training)
+                step = (epoch + 1) * samplesPerEpoch
             )
 
 
@@ -448,7 +448,7 @@ def train(encoderDir : str,
                         pred=pred, target=batchY,
                         var_names=variableNames,
                         epoch=epoch,
-                        step=(epoch + 1) * len(trainLoader)
+                        step=(epoch + 1) * samplesPerEpoch
                     )
                     didLogViz = True
 
@@ -472,7 +472,7 @@ def train(encoderDir : str,
                 {
                     "val_loss" : validationLoss
                 },
-                step = (epoch + 1) * len(validationLoader)
+                step = (epoch + 1) * samplesPerEpoch
             )
 
             for i, name in enumerate(variableNames):
@@ -481,7 +481,7 @@ def train(encoderDir : str,
                         name+"_loss_rmse" : variableLoss[name]['rmse'],
                         name+"_loss_ssim" : variableLoss[name]['ssim']
                     },
-                    step = (epoch + 1) * len(trainLoader)
+                    step = (epoch + 1) * samplesPerEpoch
                 )
 
 
@@ -518,7 +518,7 @@ def run():
         encoderDir = "./models/encoder/encoder_best.pth",
         checkpointDir = "./models/whole",
         dataPath = "./data/enso_normalized.npz",
-        samplesPerEpoch = 2048,
+        samplesPerEpoch = 1024,
         batchSize = 8,
         epochs = 500,
         lr = 1e-4,
