@@ -6,7 +6,7 @@ PROJECT = "Axial Attention MLP"
 api = wandb.Api()
 runs = api.runs(f"{ENTITY}/{PROJECT}", filters={
     "$or": [
-        {"state": {"$in": ["failed", "crashed"]}},
+        {"state": {"$in": ["failed"]}},
         {"summary_metrics._runtime": {"$lt": 10}},
         {"summary_metrics._runtime": {"$exists": False}},
     ]

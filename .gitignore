@@ -10,3 +10,8 @@ wandb
 *.log
 
 ./wandb
+
+utils.py
+deleter.py
+
+*.md

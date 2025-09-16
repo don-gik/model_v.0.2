@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
@@ -31,6 +32,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+from itertools import islice
+
+
 
 class SSIMLoss(SSIM):
     """
@@ -55,7 +59,8 @@ class AxialPrediction(nn.Module):
                  H : int = 40,
                  W : int = 200,
                  embedDim : int = 64,
-                 prediction : int = 10
+                 prediction : int = 10,
+                 gradientCheckpointing : bool = True
                  ):
         
         super().__init__()
@@ -88,6 +93,7 @@ class AxialPrediction(nn.Module):
         )
 
         self.prediction = prediction
+        self.gradientCheckpointing = gradientCheckpointing
 
     def forward(self, x):    # x: [B, T, C, H, W]
         B, T, C, H, W = x.shape
@@ -95,11 +101,23 @@ class AxialPrediction(nn.Module):
         
         zList = [self.encoder(x[:, t:t+1]).unsqueeze(1) for t in range(T)]
         z = torch.cat(zList, dim = 1)
-
-        z = self.transformer(z)
+        
+        if self.gradientCheckpointing:
+            z = checkpoint(self.transformer, z)
+        else:
+            z = self.transformer(z)
 
         # decoder 
-        outList = [self.decoder(z[:, t]).unsqueeze(1) for t in range(T - self.prediction, T)]
+        outList = []
+        for t in range(T - self.prediction, T):
+            zT = z[:, t]
+            decoded = (
+                checkpoint(self.decoder, zT)
+                if self.gradientCheckpointing
+                else self.decoder(zT)
+            )
+
+            outList.append(decoded.unsqueeze(1))
         out = torch.cat(outList, dim = 1)
 
         assert out.shape == (B, self.prediction, C, H, W)
@@ -156,7 +174,11 @@ def train(encoderDir : str,
     """
     # ---- Kwargs settings for Accelerator setup ----
     ddpKwargs = DistributedDataParallelKwargs(find_unused_parameters=False)
-    accelerator = Accelerator(mixed_precision = "bf16",kwargs_handlers = [ddpKwargs])
+    accelerator = Accelerator(
+        mixed_precision = "bf16",
+        gradient_accumulation_steps=4,
+        kwargs_handlers = [ddpKwargs]
+    )
     torch.backends.cuda.matmul.allow_tf32 = True
 
     # ---- What device? ----
@@ -243,7 +265,7 @@ def train(encoderDir : str,
     scheduler = OneCycleLR(
         optimizer = optimizer,
         max_lr = 1e-3,
-        steps_per_epoch = samplesPerEpoch // batchSize,
+        steps_per_epoch = samplesPerEpoch // batchSize // accelerator.gradient_accumulation_steps,
         epochs = epochs,
         pct_start = 0.44,
         anneal_strategy = 'cos'
@@ -261,7 +283,17 @@ def train(encoderDir : str,
         num_workers = 0,
         pin_memory = False
     )
-    validationLoader = accelerator.prepare(validationLoader)
+    trainLoader = DataLoader(
+        dataset = trainDataset,
+        sampler = sampler,
+        batch_size = batchSize,
+        num_workers = 2,
+        prefetch_factor = 1,
+        pin_memory = True,
+        drop_last = True,
+        persistent_workers = True
+    )
+    validationLoader, trainLoader = accelerator.prepare(validationLoader, trainLoader)
 
     logging.info("Training fully prepared.")
     logging.info("Training loop started")
@@ -274,36 +306,24 @@ def train(encoderDir : str,
     # ---- Training Loop ----
     for epoch in tqdm(range(epochs)):
         # model training mode
+
+        torch.cuda.reset_peak_memory_stats()
+        logging.info(f"peak GB : {torch.cuda.max_memory_allocated()/1e9}")
+        logging.info(f"Memory summary : {torch.cuda.memory_summary(device, abbreviated=True)}")
         model.train()
         
         totalLoss = 0.0
         ssimLoss = 0.0
         l1Loss = 0.0
 
-        # Sampling the Train Dataloader
-        generator = torch.Generator().manual_seed(random.randint(1, 100000))
-
-        sampler = RandomSampler(
-            data_source = trainDataset,
-            replacement = False,
-            num_samples = samplesPerEpoch,
-            generator = generator
-        )
-
-        trainLoader = DataLoader(
-            dataset = trainDataset,
-            sampler = sampler,
-            batch_size = batchSize,
-            num_workers = 2,
-            pin_memory = False,
-            drop_last = True
-        )
-
-        # Prepare train loader
-        trainLoader = accelerator.prepare(trainLoader)
+        if hasattr(trainLoader, "sampler") and hasattr(trainLoader.sampler, "set_epoch"):
+            trainLoader.sampler.set_epoch(epoch)
+        
+        training = islice(trainLoader, samplesPerEpoch)
 
         progressBar = tqdm(
-            iterable = trainLoader,
+            iterable = training,
+            total = samplesPerEpoch,
             position = accelerator.process_index,
             dynamic_ncols = True,
             leave = False,
@@ -312,6 +332,8 @@ def train(encoderDir : str,
         )
 
         logging.info(f"Epoch {epoch + 1} started")
+
+        optimizer.zero_grad()
         # ---- 1 Epoch Training Loop on freshly sampled dataset ----
         for step, (batchX, batchY) in enumerate(progressBar):
             batchX = batchX[:, :inputDays].to(device)
@@ -333,16 +355,19 @@ def train(encoderDir : str,
                 del lastPred, lastTrue
                 loss = lossL1 + lossSsim * 0.2
 
-                optimizer.zero_grad()
                 accelerator.backward(loss)
 
-                torch.nn.utils.clip_grad_norm_(
-                    parameters = model.parameters(),
-                    max_norm = 0.5
-                )
+                if accelerator.sync_gradients:
+                    torch.nn.utils.clip_grad_norm_(
+                        parameters = model.parameters(),
+                        max_norm = 0.5
+                    )
 
                 optimizer.step()
-                scheduler.step()
+                optimizer.zero_grad(set_to_none = True)
+
+                if accelerator.sync_gradients:
+                    scheduler.step()
             
             totalLoss += loss.item()
             ssimLoss += lossSsim.item()
@@ -353,7 +378,8 @@ def train(encoderDir : str,
                     {
                         "step_loss" : loss.item(),
                         "step_ssim_loss" : lossSsim.item(),
-                        "step_l1_loss" : lossL1.item()
+                        "step_l1_loss" : lossL1.item(),
+                        "learning_rate" : scheduler.get_lr()
                     },
                     step = epoch * len(trainLoader) + step
                 )
@@ -494,12 +520,13 @@ def main(encoderDir : str,
 
 
 def run():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
     main(
         encoderDir = "./models/encoder/encoder_best.pth",
         checkpointDir = "./models/whole",
         dataPath = "./data/enso_normalized.npz",
-        samplesPerEpoch = 2048 * 3,
-        batchSize = 8,
+        samplesPerEpoch = 2048,
+        batchSize = 16,
         epochs = 500,
         lr = 1e-4,
 

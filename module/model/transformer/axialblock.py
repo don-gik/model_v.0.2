@@ -18,7 +18,7 @@ class PositionalEncoding3D(nn.Module):
                  C : int,
                  heads : int,
                  bands : int = 6,
-                 maxLen : int = 512
+                 maxLen : int = 256
                  ):
         
         super().__init__()
