@@ -102,19 +102,14 @@ class AxialPrediction(nn.Module):
         zList = [self.encoder(x[:, t:t+1]).unsqueeze(1) for t in range(T)]
         z = torch.cat(zList, dim = 1)
         
-        if self.gradientCheckpointing:
-            z = checkpoint(self.transformer, z)
-        else:
-            z = self.transformer(z)
+        z = self.transformer(z)
 
         # decoder 
         outList = []
         for t in range(T - self.prediction, T):
             zT = z[:, t]
             decoded = (
-                checkpoint(self.decoder, zT)
-                if self.gradientCheckpointing
-                else self.decoder(zT)
+                self.decoder(zT)
             )
 
             outList.append(decoded.unsqueeze(1))
@@ -333,13 +328,11 @@ def train(encoderDir : str,
 
         logging.info(f"Epoch {epoch + 1} started")
 
-        optimizer.zero_grad()
+        torch.cuda.empty_cache()
         # ---- 1 Epoch Training Loop on freshly sampled dataset ----
         for step, (batchX, batchY) in enumerate(progressBar):
             batchX = batchX[:, :inputDays].to(device)
             batchY = batchY[:, :targetDays].to(device)
-
-            torch.cuda.empty_cache()
 
             with accelerator.accumulate(model):
                 pred = model(batchX)
@@ -381,15 +374,15 @@ def train(encoderDir : str,
                         "step_l1_loss" : lossL1.item(),
                         "learning_rate" : scheduler.get_lr()
                     },
-                    step = epoch * len(trainLoader) + step
+                    step = epoch * len(training) + step
                 )
         
 
         # ---- if an epoch ends ----
         if accelerator.is_main_process:
-            totalLoss /= len(trainLoader)
-            ssimLoss  /= len(trainLoader)
-            l1Loss    /= len(trainLoader)
+            totalLoss /= len(training)
+            ssimLoss  /= len(training)
+            l1Loss    /= len(training)
 
             wandb.log(
                 {
@@ -398,7 +391,7 @@ def train(encoderDir : str,
                     "ssim_loss" : ssimLoss,
                     "L1_loss"   : l1Loss
                 },
-                step = (epoch + 1) * len(trainLoader)
+                step = (epoch + 1) * len(training)
             )
 
 
@@ -526,7 +519,7 @@ def run():
         checkpointDir = "./models/whole",
         dataPath = "./data/enso_normalized.npz",
         samplesPerEpoch = 2048,
-        batchSize = 16,
+        batchSize = 8,
         epochs = 500,
         lr = 1e-4,
 
