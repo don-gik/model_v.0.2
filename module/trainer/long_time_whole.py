@@ -619,8 +619,8 @@ def run():
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128")
     main(
         encoderDir = "./models/encoder_30days/encoder_long.pth",
-        checkpointDir = "./models/long_30days_decoder",
-        lastCheckpoint = "./models/whole_30days_decoder+/axial_attention_mlp+10.pth",
+        checkpointDir = "./models/long_60day_pred",
+        lastCheckpoint = "./models/long_30days_decoder+/axial_attention_mlp+13.pth",
         dataPath = "./data/enso_30days_normalized.npz",
         samplesPerEpoch = 512,
         batchSize = 8,
