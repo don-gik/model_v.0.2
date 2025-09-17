@@ -72,7 +72,7 @@ class RefineBlockDecoder(nn.Module):
     def __init__(self,
                  channels : int,
                  outChannels : int,
-                 depth : int = 3,
+                 depth : int = 5,
                  drop : float = 0.0
                  ):
         

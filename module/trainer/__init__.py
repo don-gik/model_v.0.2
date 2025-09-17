@@ -1,2 +1,3 @@
 import module.trainer.whole_trainer
 import module.trainer.encoder_trainer
+import module.trainer.long_time_whole

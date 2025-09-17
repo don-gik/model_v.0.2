@@ -102,26 +102,72 @@ class AxialPrediction(nn.Module):
     def forward(self, x):    # x: [B, T, C, H, W]
         B, T, C, H, W = x.shape
 
-        
-        zList = [self.encoder(x[:, t:t+1]).unsqueeze(1) for t in range(T)]
-        z = torch.cat(zList, dim = 1)
-        
-        z = self.transformer(z)
+        # Encode per day with optional checkpointing to drop activations
+        if self.gradientCheckpointing:
+            def enc_step(inp): return self.encoder(inp)
 
-        # decoder 
+            zList = []
+            for t in range(T):
+                zt = checkpoint(enc_step, x[:, t:t+1], use_reentrant=False).unsqueeze(1)
+                zList.append(zt)
+
+            z = torch.cat(zList, dim=1)
+
+            # Axial transformer is the memory hog; checkpoint it
+            z = checkpoint(lambda y: self.transformer(y), z, use_reentrant=False)
+        else:
+            zList = [self.encoder(x[:, t:t+1]).unsqueeze(1) for t in range(T)]
+            z = torch.cat(zList, dim=1)
+
+            z = self.transformer(z)
+
+
         outList = []
         for t in range(T - self.prediction, T):
             zT = z[:, t]
-            decoded = (
-                self.decoder(zT)
-            )
+
+            if self.gradientCheckpointing:
+                decoded = checkpoint(lambda u: self.decoder(u), zT, use_reentrant=False)
+            else:
+                decoded = self.decoder(zT)
 
             outList.append(decoded.unsqueeze(1))
+
+
         out = torch.cat(outList, dim = 1)
 
-        assert out.shape == (B, self.prediction, C, H, W)
-
         return out
+    
+
+class LongTimeAxial(nn.Module):
+    def __init__(self,
+                 model : AxialPrediction,
+                 target : int = 60,
+                 T : int = 60
+                 ):
+        
+        super().__init__()
+
+        self.model = model
+        self.prediction = target
+        self.T = T
+    
+    def forward(self, x):
+        outList = []
+
+        for _ in range(self.T // self.prediction):
+            y = self.model(x)    # [B, T, C, H, W]
+            z = torch.cat([x, y], dim = 1)
+            x = z[:, -self.T:]
+
+            outList.append(y)
+        
+        out = torch.cat(outList, dim = 1)
+        
+        return out[:, -self.prediction:]
+
+
+
 
 
 def _wandb_log_lastday_panel(pred: torch.Tensor,
@@ -166,7 +212,8 @@ def train(encoderDir : str,
           lr : float = 1e-4,
 
           inputDays : int = 60,
-          targetDays : int = 10
+          targetDays : int = 10,
+          lastTarget : int = 30
           ):
     """
     Training Function for the whole model.
@@ -191,7 +238,7 @@ def train(encoderDir : str,
     if accelerator.is_main_process:
         wandb.init(
             project = "Axial Attention MLP",
-            name = "whole",
+            name = "long",
             config = {"lr" : lr, "batchSize" : batchSize, "epochs" : epochs}
         )
 
@@ -220,24 +267,63 @@ def train(encoderDir : str,
 
 
     # ---- Load Model Checkpoints ----
-    model = AxialPrediction(
+    modelCore = AxialPrediction(
         T = inputDays,
         prediction = targetDays
+    )
+    model = LongTimeAxial(
+        model = modelCore,
+        target = targetDays,
+        T = inputDays
     )
 
     try:
         # Load encoder checkpoint
         encoderCheckpoint = torch.load(encoderDir, map_location="cpu")
-        model.encoder.load_state_dict(encoderCheckpoint)
+        model.model.encoder.load_state_dict(encoderCheckpoint)
     
     except Exception as e:
         logging.error(f"Error : {e}")
         logging.info("Encoder checkpoint not loaded.")
 
     try:
-        # Load whole model checkpoint
-        modelCheckpoint = torch.load(lastCheckpoint, map_location="cpu")
-        model.load_state_dict(modelCheckpoint)
+        try:
+            # Load whole model checkpoint
+            modelCheckpoint = torch.load(lastCheckpoint, map_location="cpu")
+            model.model.load_state_dict(modelCheckpoint)
+
+            logging.info("Model AxialPred loaded.")
+        except:
+
+            try:
+                modelCheckpoint = torch.load(lastCheckpoint, map_location="cpu")
+                model.load_state_dict(modelCheckpoint)
+
+                logging.info("Model LongAxialPred loaded.")
+            
+            except:
+                try:
+                    modelCheckpoint = torch.load(lastCheckpoint, map_location="cpu")
+
+                    loadModel = LongTimeAxial(
+                        model = modelCore,
+                        target = lastTarget,
+                        T = inputDays
+                    )
+
+                    loadModel.load_state_dict(modelCheckpoint)
+
+                    model.model = loadModel.model
+
+                    del loadModel
+                
+                except:
+
+                    modelCheckpoint = torch.load(lastCheckpoint, map_location="cpu")
+                    model.model.load_state_dict(modelCheckpoint)
+
+                    logging.info("Model Core has been loaded.")
+            
     
     except Exception as e:
         logging.error(f"Error : {e}")
@@ -507,7 +593,8 @@ def main(encoderDir : str,
          lr : float = 1e-4,
 
          inputDays : int = 60,
-         targetDays : int = 10
+         targetDays : int = 10,
+         lastTarget : int = 30
         ):
     train(
         encoderDir = encoderDir,
@@ -520,7 +607,8 @@ def main(encoderDir : str,
         lr = lr,
 
         inputDays = inputDays,
-        targetDays = targetDays
+        targetDays = targetDays,
+        lastTarget = lastTarget
     )
 
     return
@@ -528,16 +616,18 @@ def main(encoderDir : str,
 
 def run():
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128")
     main(
-        encoderDir = "./models/encoder_30days/encoder_best.pth",
-        checkpointDir = "./models/whole_30days_decoder+",
-        lastCheckpoint = "./models/whole_30days_decoder+/axial_attention_mlp+1.pth",
+        encoderDir = "./models/encoder_30days/encoder_long.pth",
+        checkpointDir = "./models/long_30days_decoder",
+        lastCheckpoint = "./models/whole_30days_decoder+/axial_attention_mlp+10.pth",
         dataPath = "./data/enso_30days_normalized.npz",
         samplesPerEpoch = 512,
         batchSize = 8,
         epochs = 100,
-        lr = 1e-3,
+        lr = 1e-4,
 
         inputDays = 60,
-        targetDays = 10
+        targetDays = 60,
+        lastTarget = 30
     )

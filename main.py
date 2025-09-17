@@ -42,5 +42,9 @@ if __name__ == "__main__":
         logging.info("The whole model is getting prepared for training.")
 
         trainer.whole_trainer.run()
+    elif args.train == "long":
+        logging.info("The Long Whole model is getting prepared for training.")
+
+        trainer.long_time_whole.run()
     else:
         logging.info(f"Training Failed. {args.train} is not detected.")

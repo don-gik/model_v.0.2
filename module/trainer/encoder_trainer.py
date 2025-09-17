@@ -144,7 +144,7 @@ def train_encoder(
 # Main
 # ----------------------------
 def main():
-    npz = np.load("./data/enso_normalized.npz")
+    npz = np.load("./data/enso_30days_normalized.npz")
     base_npz_data = npz["data"][:, :, :40, :200]  # [T, C, H, W]
 
     if not os.path.exists("data"):
@@ -160,7 +160,7 @@ def main():
         temperature=0.1,
         num_workers=4,
         device="cuda",
-        ckpt_dir="./models/encoder",
+        ckpt_dir=f"./models/encoder_30days",
     )
 
 
