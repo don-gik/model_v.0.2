@@ -529,10 +529,10 @@ def main(encoderDir : str,
 def run():
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     main(
-        encoderDir = "./models/encoder_30days/encoder_best.pth",
-        checkpointDir = "./models/whole_30days_decoder+",
-        lastCheckpoint = "./models/whole_30days_decoder+/axial_attention_mlp+1.pth",
-        dataPath = "./data/enso_30days_normalized.npz",
+        encoderDir = "./models/encoder_365days/encoder_best.pth",
+        checkpointDir = "./models/whole_365days_decoder+",
+        lastCheckpoint = "./models/whole_365days_decoder+/axial_attention_mlp+1.pth",
+        dataPath = "./data/enso_avg365.npz",
         samplesPerEpoch = 512,
         batchSize = 8,
         epochs = 100,

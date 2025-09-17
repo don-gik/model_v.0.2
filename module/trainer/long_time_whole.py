@@ -620,8 +620,8 @@ def run():
     main(
         encoderDir = "./models/encoder_30days/encoder_long.pth",
         checkpointDir = "./models/long_60day_pred",
-        lastCheckpoint = "./models/long_30days_decoder+/axial_attention_mlp+13.pth",
-        dataPath = "./data/enso_30days_normalized.npz",
+        lastCheckpoint = "./models/long_60days_pred/axial_attention_mlp+2.pth",
+        dataPath = "./data/enso_avg365.npz",
         samplesPerEpoch = 512,
         batchSize = 8,
         epochs = 100,
