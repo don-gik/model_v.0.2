@@ -615,7 +615,7 @@ def main(encoderDir : str,
 
 
 def run():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1"
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:128")
     main(
         encoderDir = "./models/encoder_30days/encoder_long.pth",
