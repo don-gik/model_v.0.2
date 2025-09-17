@@ -83,7 +83,7 @@ class AxialPrediction(nn.Module):
         self.decoder = RefineBlockDecoder(
             channels = embedDim,
             outChannels = C,
-            depth = 3,
+            depth = 5,
             drop = 0.1
         )
 
@@ -160,7 +160,7 @@ def train(encoderDir : str,
           checkpointDir : str,
           lastCheckpoint : str,
           dataPath : str,
-          samplesPerEpoch : int = 2048 * 3,
+          batchesPerEpoch : int = 2048 * 3,
           batchSize : int = 4, 
           epochs : int = 500, 
           lr : float = 1e-4,
@@ -212,11 +212,6 @@ def train(encoderDir : str,
         dataset = fullDataset,
         lengths = [len(fullDataset) - validationN, validationN]
     )
-
-    sampler = DistributedSampler(
-        dataset = dataset,
-        shuffle = True
-    )  if accelerator.num_processes > 1 else None
 
 
     # ---- Load Model Checkpoints ----
@@ -279,26 +274,24 @@ def train(encoderDir : str,
     model, optimizer = accelerator.prepare(model, optimizer)
 
     # Validation Loader prepare
-    validationLoader = DataLoader(
-        dataset = valDataset,
-        sampler = sampler,
-        batch_size = batchSize,
-        num_workers = 2,
-        prefetch_factor = 1,
-        pin_memory = True,
-        drop_last = True,
-        persistent_workers = True
-    )
-    trainLoader = DataLoader(
-        dataset = trainDataset,
-        sampler = sampler,
-        batch_size = batchSize,
-        num_workers = 2,
-        prefetch_factor = 1,
-        pin_memory = True,
-        drop_last = True,
-        persistent_workers = True
-    )
+    if accelerator.num_processes > 1:
+        train_sampler = DistributedSampler(trainDataset, shuffle=True, drop_last=True)
+        val_sampler   = DistributedSampler(valDataset,   shuffle=False, drop_last=False)
+
+        trainLoader = DataLoader(trainDataset, batch_size=batchSize, sampler=train_sampler,
+                                num_workers=2, prefetch_factor=1, pin_memory=True,
+                                drop_last=True, persistent_workers=True)
+        validationLoader = DataLoader(valDataset, batch_size=batchSize, sampler=val_sampler,
+                                    num_workers=2, prefetch_factor=1, pin_memory=True,
+                                    drop_last=False, persistent_workers=True)
+    else:
+        trainLoader = DataLoader(trainDataset, batch_size=batchSize, shuffle=True,
+                                num_workers=2, prefetch_factor=1, pin_memory=True,
+                                drop_last=True, persistent_workers=True)
+        validationLoader = DataLoader(valDataset, batch_size=batchSize, shuffle=False,
+                                    num_workers=2, prefetch_factor=1, pin_memory=True,
+                                    drop_last=False, persistent_workers=True)
+    
     validationLoader, trainLoader = accelerator.prepare(validationLoader, trainLoader)
 
     logging.info("Training fully prepared.")
@@ -324,12 +317,13 @@ def train(encoderDir : str,
 
         if hasattr(trainLoader, "sampler") and hasattr(trainLoader.sampler, "set_epoch"):
             trainLoader.sampler.set_epoch(epoch)
+            logging.info("Epoch changed, new samples loaded.")
         
-        training = islice(trainLoader, samplesPerEpoch)
+        training = islice(trainLoader, batchesPerEpoch)
 
         progressBar = tqdm(
             iterable = training,
-            total = samplesPerEpoch,
+            total = batchesPerEpoch,
             position = accelerator.process_index,
             dynamic_ncols = True,
             leave = False,
@@ -385,15 +379,15 @@ def train(encoderDir : str,
                         "step_l1_loss" : lossL1.item(),
                         "learning_rate" : scheduler.get_last_lr()[0]
                     },
-                    step = epoch * samplesPerEpoch + step
+                    step = epoch * batchesPerEpoch + step
                 )
         
 
         # ---- if an epoch ends ----
         if accelerator.is_main_process:
-            totalLoss /= samplesPerEpoch
-            ssimLoss  /= samplesPerEpoch
-            l1Loss    /= samplesPerEpoch
+            totalLoss /= batchesPerEpoch
+            ssimLoss  /= batchesPerEpoch
+            l1Loss    /= batchesPerEpoch
 
             wandb.log(
                 {
@@ -402,7 +396,7 @@ def train(encoderDir : str,
                     "ssim_loss" : ssimLoss,
                     "L1_loss"   : l1Loss
                 },
-                step = (epoch + 1) * samplesPerEpoch
+                step = (epoch + 1) * batchesPerEpoch
             )
 
 
@@ -459,7 +453,7 @@ def train(encoderDir : str,
                         pred=pred, target=batchY,
                         var_names=variableNames,
                         epoch=epoch,
-                        step=(epoch + 1) * samplesPerEpoch
+                        step=(epoch + 1) * batchesPerEpoch
                     )
                     didLogViz = True
 
@@ -484,7 +478,7 @@ def train(encoderDir : str,
                 {
                     "val_loss" : validationLoss
                 },
-                step = (epoch + 1) * samplesPerEpoch
+                step = (epoch + 1) * batchesPerEpoch
             )
 
             for i, name in enumerate(variableNames):
@@ -493,7 +487,7 @@ def train(encoderDir : str,
                         name+"_loss_rmse" : variableLoss[name]['rmse'],
                         name+"_loss_ssim" : variableLoss[name]['ssim']
                     },
-                    step = (epoch + 1) * samplesPerEpoch
+                    step = (epoch + 1) * batchesPerEpoch
                 )
 
 
@@ -501,7 +495,7 @@ def main(encoderDir : str,
          checkpointDir : str,
          lastCheckpoint : str,
          dataPath : str,
-         samplesPerEpoch : int = 2048 * 3,
+         batchesPerEpoch : int = 2048 * 3,
          batchSize : int = 4, 
          epochs : int = 500, 
          lr : float = 1e-4,
@@ -514,7 +508,7 @@ def main(encoderDir : str,
         checkpointDir = checkpointDir,
         lastCheckpoint = lastCheckpoint,
         dataPath = dataPath,
-        samplesPerEpoch = samplesPerEpoch,
+        batchesPerEpoch = batchesPerEpoch,
         batchSize = batchSize,
         epochs = epochs,
         lr = lr,
@@ -533,7 +527,7 @@ def run():
         checkpointDir = "./models/whole_365days_decoder+",
         lastCheckpoint = "./models/whole_365days_decoder+/axial_attention_mlp+1.pth",
         dataPath = "./data/enso_avg365.npz",
-        samplesPerEpoch = 512,
+        batchesPerEpoch = 512,
         batchSize = 8,
         epochs = 100,
         lr = 1e-3,

@@ -329,3 +329,35 @@ class AxialBlockMLP(nn.Module):
 
         out = z3.permute(0, 2, 1, 3, 4).contiguous()    # out: [B, T, C, H, W]
         return out + x
+
+
+class AxialTransformer(nn.Module):
+    def __init__(self,
+                 C : int,
+                 T : int,
+                 H : int,
+                 W : int,
+                 depth : int = 3,
+                 heads : int = 16,
+                 drop : float = 0.0
+                 ):
+        
+        super().__init__()
+
+        self.blocks = nn.ModuleList([
+            AxialBlockMLP(
+                C = C,
+                T = T,
+                H = H,
+                W = W,
+                heads = heads,
+                drop = drop
+            ) for _ in range(depth)
+        ])
+
+    
+    def forward(self, x):
+        for block in self.blocks:
+            y = block(x)
+        
+        return y

@@ -98,4 +98,4 @@ class RefineBlockDecoder(nn.Module):
             z = z + block(z)
         
         out = self.projection(z).permute(0, 2, 1, 3, 4).contiguous()
-        return out.squeeze()
+        return out.squeeze(1)
