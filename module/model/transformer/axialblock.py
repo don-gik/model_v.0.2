@@ -335,7 +335,7 @@ class AxialBlockMLP(nn.Module):
 
 
         out = z3.permute(0, 2, 1, 3, 4).contiguous()    # out: [B, T, C, H, W]
-        return out + x
+        return out
 
 
 class AxialTransformer(nn.Module):

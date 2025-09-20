@@ -197,6 +197,13 @@ class Encoder(nn.Module):
         self.toEmbed = nn.Conv2d(in_channels = midDim,
                                  out_channels = embedDim,
                                  kernel_size = 1)
+
+        # Additional downsampling to produce H//4, W//4 features for AxialBlock
+        self.downsample2 = nn.Conv2d(in_channels = embedDim,
+                                     out_channels = embedDim,
+                                     kernel_size = 3,
+                                     stride = 2,
+                                     padding = 1)
         
 
         windowWidth, windowHeight = window
@@ -222,14 +229,15 @@ class Encoder(nn.Module):
         x = self.dilated(x) + x
         x = self.bottleneck(x) + x
         x = self.toEmbed(x)    # [B, C, H // 2, W // 2]
+        x = self.downsample2(x)  # [B, C, H // 4, W // 4]
 
         for block in self.blocks:    # windowed MSHA + MLP
             x = block(x)
 
 
-        x = x.permute(0, 2, 3, 1)   # [B, H // 2, W // 2, C]
+        x = x.permute(0, 2, 3, 1)   # [B, H // 4, W // 4, C]
         x = self.finalLayerNorm(x)
-        x = x.permute(0, 3, 1, 2)   # [B, C, H // 2, W // 2]
+        x = x.permute(0, 3, 1, 2)   # [B, C, H // 4, W // 4]
         return x
     
     

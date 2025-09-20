@@ -101,6 +101,31 @@ class AxialPrediction(nn.Module):
         
         self.next_head = nn.Conv3d(embedDim, embedDim, kernel_size=1, bias=True)
 
+    def encode(self, x):
+        B, T, C, H, W = x.shape
+
+        if self.gradientCheckpointing:
+            def enc_step(inp): return self.encoder(inp)
+
+            zList = []
+            for t in range(T):
+                zt = checkpoint(enc_step, x[:, t:t+1], use_reentrant=False).unsqueeze(1)
+                zList.append(zt)
+
+            z = torch.cat(zList, dim=1)
+        else:
+            zList = [self.encoder(x[:, t:t+1]).unsqueeze(1) for t in range(T)]
+            z = torch.cat(zList, dim=1)
+
+        return z
+    
+    def decode_step(self, z):
+        z_last = z[:, -1:].permute(0, 2, 1, 3, 4)     # [B,Cz,1,H',W']
+        z_next = self.next_head(z_last).squeeze(2)     # [B,Cz,H',W']
+        y1 = self.decoder(z_next).unsqueeze(1)         # [B,1,C,H,W]
+        return y1
+
+
     def forward(self, x):    # x: [B, T, C, H, W]
         B, T, C, H, W = x.shape
 
@@ -149,6 +174,14 @@ class AxialPrediction(nn.Module):
         z_next = self.next_head(z_last).squeeze(2)     # [B,Cz,H',W']
         y1 = self.decoder(z_next).unsqueeze(1)         # [B,1,C,H,W]
         return y1
+
+    def trans(self, z):
+        if self.gradientCheckpointing:
+            z = checkpoint(lambda y: self.transformer(y), z, use_reentrant=False)
+        else:
+            z = self.transformer(z)
+        
+        return z
     
 
 class LongTimeAxial(nn.Module):
@@ -167,13 +200,13 @@ class LongTimeAxial(nn.Module):
     def forward(self, x):
 
         outs = []
-        for _ in range(self.prediction):
-            y1 = self.model.step(x)                     # [B,1,C,H,W]
-            x = torch.cat([x, y1], dim=1)[:, -self.T:]
-            outs.append(y1)
-        return torch.cat(outs, dim=1)                  # [B,P,C,H,W]
         
-        return out[:, -self.prediction:]
+        encodedX = self.model.encode(x)
+        for _ in range(self.prediction):
+            y1 = self.model.trans(encodedX)                    # [B,1,C,H,W]
+            encodedX = torch.cat([encodedX, y1], dim=1)[:, -self.T:]
+            outs.append(self.model.decode_step(y1))
+        return torch.cat(outs, dim=1)                  # [B,P,C,H,W]
 
 
 

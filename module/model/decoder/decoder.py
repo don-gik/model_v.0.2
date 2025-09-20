@@ -20,7 +20,7 @@ class UpSample(nn.Module):
     def forward(self, x):
         y = F.interpolate(
             input = x,
-            scale_factor = (1, 2, 2),
+            scale_factor = (1, 4, 4),
             mode = "trilinear",
             align_corners = False
         )
@@ -90,7 +90,7 @@ class RefineBlockDecoder(nn.Module):
             kernel_size = 1
         )
     
-    def forward(self, x):    # x: [B, C, H // 2, W // 2]
+    def forward(self, x):    # x: [B, C, H // 4, W // 4]
         z = x.unsqueeze(1)
         z = self.upsample(z.permute(0, 2, 1, 3, 4))
 
